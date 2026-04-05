@@ -23,6 +23,10 @@ export default function Home() {
   const [translateTo, setTranslateTo] = useState<'zh' | 'en'>('zh');
   const [translateRegion, setTranslateRegion] = useState<'cn' | 'us'>('cn');
 
+  // 匹配表单
+  const [matchResume, setMatchResume] = useState('');
+  const [matchJD, setMatchJD] = useState('');
+
   const handleDiagnose = async () => {
     if (!diagnoseContent) return;
     setLoading(true);
@@ -58,6 +62,54 @@ export default function Home() {
         body: JSON.stringify({ 
           bullet: optimizeBullet, 
           targetRole: optimizeRole 
+        }),
+      });
+      const data = await res.json();
+      setResult(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTranslate = async () => {
+    if (!translateContent) return;
+    setLoading(true);
+    setResult(null);
+    
+    try {
+      const res = await fetch('/api/resume/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          content: translateContent, 
+          from: translateFrom,
+          to: translateTo,
+          region: translateRegion
+        }),
+      });
+      const data = await res.json();
+      setResult(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMatch = async () => {
+    if (!matchResume || !matchJD) return;
+    setLoading(true);
+    setResult(null);
+    
+    try {
+      const res = await fetch('/api/resume/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          resume: matchResume, 
+          jobDescription: matchJD 
         }),
       });
       const data = await res.json();
@@ -135,7 +187,7 @@ export default function Home() {
     <div className="space-y-4">
       <div className="flex gap-4 mb-4">
         <div className="flex-1">
-          <label className="block text-sm font-medium mb-2">从</label>
+          <label className="block text-sm font-medium mb-2">翻译方向</label>
           <select
             value={translateFrom}
             onChange={(e) => setTranslateFrom(e.target.value as 'zh' | 'en')}
@@ -167,10 +219,11 @@ export default function Home() {
         />
       </div>
       <button
-        disabled
-        className="w-full py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed"
+        onClick={handleTranslate}
+        disabled={loading || !translateContent}
+        className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
       >
-        即将上线
+        {loading ? '翻译中...' : '开始翻译'}
       </button>
     </div>
   );
@@ -180,6 +233,8 @@ export default function Home() {
       <div>
         <label className="block text-sm font-medium mb-2">简历内容</label>
         <textarea
+          value={matchResume}
+          onChange={(e) => setMatchResume(e.target.value)}
           placeholder="粘贴你的简历..."
           className="w-full h-32 p-3 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500"
         />
@@ -187,15 +242,18 @@ export default function Home() {
       <div>
         <label className="block text-sm font-medium mb-2">岗位JD</label>
         <textarea
+          value={matchJD}
+          onChange={(e) => setMatchJD(e.target.value)}
           placeholder="粘贴目标岗位的JD..."
           className="w-full h-32 p-3 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
       <button
-        disabled
-        className="w-full py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed"
+        onClick={handleMatch}
+        disabled={loading || !matchResume || !matchJD}
+        className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
       >
-        即将上线
+        {loading ? '分析中...' : '开始匹配分析'}
       </button>
     </div>
   );
@@ -264,6 +322,71 @@ export default function Home() {
                   <span key={i} className="px-2 py-1 bg-green-200 rounded text-sm">{kw}</span>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // 翻译结果
+    if (result.translated) {
+      return (
+        <div className="mt-6 p-4 bg-purple-50 rounded-lg space-y-4">
+          <div>
+            <h3 className="font-semibold mb-2">✨ 翻译结果：</h3>
+            <div className="p-3 bg-white rounded border whitespace-pre-wrap">{result.translated}</div>
+          </div>
+          
+          {result.cultural_notes?.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2">📝 文化适配说明：</h3>
+              <ul className="list-disc list-inside text-sm space-y-1">
+                {result.cultural_notes.map((note: string, i: number) => (
+                  <li key={i}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // 匹配结果
+    if (result.match_score !== undefined) {
+      return (
+        <div className="mt-6 p-4 bg-amber-50 rounded-lg space-y-4">
+          <div className="text-3xl font-bold text-amber-600 mb-4">匹配度: {result.match_score}%</div>
+          
+          {result.matched_points?.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2 text-green-700">✅ 匹配点：</h3>
+              <ul className="list-disc list-inside text-sm space-y-1">
+                {result.matched_points.map((point: string, i: number) => (
+                  <li key={i}>{point}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {result.missing_points?.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2 text-red-700">❌ 缺失点：</h3>
+              <ul className="list-disc list-inside text-sm space-y-1">
+                {result.missing_points.map((point: string, i: number) => (
+                  <li key={i}>{point}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {result.suggestions?.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2">💡 改进建议：</h3>
+              <ul className="list-disc list-inside text-sm space-y-1">
+                {result.suggestions.map((s: string, i: number) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
